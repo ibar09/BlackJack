@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
+using DG.Tweening;
 
 public class GameManager : MonoBehaviour
 {
@@ -13,7 +14,6 @@ public class GameManager : MonoBehaviour
     public UnityEngine.UI.Button startGameBtn;
     public UnityEngine.UI.Button exitBtn;
     public UnityEngine.UI.Button restartBtn;
-    public GameObject dealCardBtn1;
     public GameObject hitCardBtn1;
     public GameObject standCardBtn1;
     public GameObject startGameBtn1;
@@ -49,28 +49,36 @@ public class GameManager : MonoBehaviour
     public GameObject exitBtn2;
     public AudioSource audioSource;
 
+    public int dealerAmount, playerAmount;
+    public int betAmount;
+    public TextMeshProUGUI dealerAmountUI, playerAmountUI;
+    public TMP_InputField betInput;
+    public GameObject betButton;
+    private bool firstTime = true;
+    private GameObject dealerCard;
+    private Vector3 cardCoverInitialScale;
+
+
     // Start is called before the first frame update
     void Start()
     {
-        dealCardBtn1.SetActive(false);
+        // dealCardBtn1.SetActive(false);
         hitCardBtn1.SetActive(false);
         standCardBtn1.SetActive(false);
 
         cardPrefab = Resources.Load("Card");
-        dealCardBtn.onClick.AddListener(() => DealBtnClicked());
+        // dealCardBtn.onClick.AddListener(() => DealBtnClicked());
         hitCardBtn.onClick.AddListener(() => HitBtnClicked());
         standCardBtn.onClick.AddListener(() => StandBtnClicked());
         startGameBtn.onClick.AddListener(() => StartBtnClicked());
 
-        // hitCardBtn.onClick.AddListener(() => HitBtnClicked());
-        // standCardBtn.onClick.AddListener(() => StandBtnClicked());
-        // exitBtn2.GetComponent<UnityEngine.UI.Button>().onClick.AddListener(() => Clicked());
-        // restartBtn.onClick.AddListener(() => Clicked());
+        cardCoverInitialScale = DealerCardCover1.transform.localScale;
     }
 
 
     private void StartBtnClicked()
     {
+
         // dealCardBtn1.SetActive(true);
         PlayerText.SetActive(true);
         DealerText.SetActive(true);
@@ -78,9 +86,13 @@ public class GameManager : MonoBehaviour
         startGameBtn1.SetActive(false);
         exitBtn1.SetActive(false);
         exitBtn2.SetActive(true);
+        betButton.SetActive(true);
         restartBtn1.SetActive(true);
-        DealBtnClicked();
+        betInput.gameObject.SetActive(true);
         audioSource.enabled = false;
+        dealerAmountUI.transform.parent.gameObject.SetActive(true);
+        playerAmountUI.transform.parent.gameObject.SetActive(true);
+        DealBtnClicked();
     }
 
     private void HitBtnClicked()
@@ -91,6 +103,7 @@ public class GameManager : MonoBehaviour
             GameObject newCard = (GameObject)Instantiate(cardPrefab, cardSpot5.transform.position, Quaternion.identity);
             newCard.transform.SetParent(cardSpot5.transform);
             cardGOs.Add(newCard);
+            SoundManager.Instance.Play("card");
             CardInit(newCard);
 
             if (cardGOs.Count > 1)
@@ -111,6 +124,40 @@ public class GameManager : MonoBehaviour
 
 
     }
+    public void Bet()
+    {
+
+        if (betInput.text != "" && betInput.text != null)
+        {
+            int newBetAmount = int.Parse(betInput.text);
+            if (newBetAmount > playerAmount)
+                betAmount = playerAmount;
+            else
+                betAmount = newBetAmount;
+        }
+        else
+            betAmount = 100;
+        betInput.gameObject.SetActive(false);
+
+
+        if (!firstTime)
+        {
+            foreach (GameObject card in cardGOs)
+            {
+                Destroy(card);
+            }
+            cardGOs.Clear();
+            cardGOs = new List<GameObject>();
+            DealBtnClicked();
+        }
+        betButton.SetActive(false);
+        hitCardBtn1.SetActive(true);
+        standCardBtn1.SetActive(true);
+        firstTime = false;
+
+    }
+
+
     private void Bust(string name)
     {
         hitCardBtn.gameObject.SetActive(false);
@@ -120,21 +167,41 @@ public class GameManager : MonoBehaviour
         UpdateDealerText();
         if (name == "player")
         {
+            playerAmount -= betAmount;
+            playerAmountUI.text = playerAmount.ToString();
+            dealerAmount += betAmount;
+            dealerAmountUI.text = dealerAmount.ToString();
             endMessage = "Dealer wins!";
         }
         else
         {
+            playerAmount += betAmount;
+            playerAmountUI.text = playerAmount.ToString();
+            if (betAmount > dealerAmount)
+                dealerAmount = 0;
+            else
+                dealerAmount -= betAmount;
+            dealerAmountUI.text = dealerAmount.ToString();
             endMessage = "Player wins!";
         }
         endGameUI.SetActive(true);
         endGameText.text = endMessage;
+        if (dealerAmount != 0 && playerAmount != 0)
+        {
+            betButton.SetActive(true);
+            betInput.gameObject.SetActive(true);
+        }
     }
     private void StandBtnClicked()
     {
+
         standCardBtn1.SetActive(false);
 
-        DealerCardCover1.SetActive(false);
+        DealerCardCover1.transform.DOScaleX(0f, 0.3f).OnComplete(() => { dealerCard.transform.DOScaleX(1f, 0.3f); });
+
+        // DealerCardCover1.SetActive(false);
         DealerCardCover2.SetActive(false);
+        SoundManager.Instance.Play("card flip");
         hitCardBtn1.SetActive(false);
 
         StartCoroutine(DealerTurn());
@@ -143,11 +210,17 @@ public class GameManager : MonoBehaviour
     }
     public void Restart()
     {
+
         Deck.deck.Clear();
         Deck.deck = new List<string>();
         Deck.cardName_Sprite = new Dictionary<string, Sprite>();
         dealerTotal = 0;
         playerTotal = 0;
+        firstTime = true;
+        playerAmount = 2000;
+        playerAmountUI.text = playerAmount.ToString();
+        dealerAmount = 2000;
+        dealerAmountUI.text = dealerAmount.ToString();
         foreach (GameObject card in cardGOs)
         {
             Destroy(card);
@@ -156,6 +229,10 @@ public class GameManager : MonoBehaviour
         cardGOs = new List<GameObject>();
         Deck.NewDeck();
         Deck.Shuffle();
+        hitCardBtn1.SetActive(false);
+        standCardBtn1.SetActive(false);
+        betButton.SetActive(true);
+        betInput.gameObject.SetActive(true);
         DealBtnClicked();
     }
     public void ExitGame()
@@ -165,11 +242,14 @@ public class GameManager : MonoBehaviour
 
     private void DealBtnClicked()
     {
+        dealerTotal = 0;
+        playerTotal = 0;
         endGameUI.SetActive(false);
         GameObject newCard = (GameObject)Instantiate(cardPrefab, cardSpot3.transform.position, Quaternion.identity);
         newCard.transform.SetParent(cardSpot3.transform);
         cardGOs.Add(newCard);
         CardInit(newCard);
+        DealerCardCover1.transform.localScale = cardCoverInitialScale;
 
 
         GameObject newCard1 = (GameObject)Instantiate(cardPrefab, cardSpot4.transform.position, Quaternion.identity);
@@ -179,16 +259,17 @@ public class GameManager : MonoBehaviour
 
         GameObject newCard2 = (GameObject)Instantiate(cardPrefab, cardSpot1.transform.position, Quaternion.identity);
         newCard2.transform.SetParent(cardSpot1.transform);
+        newCard2.transform.localScale = new Vector3(0, 1, 1);
         cardGOs.Add(newCard2);
         CardInit(newCard2);
+        dealerCard = newCard2;
 
         GameObject newCard3 = (GameObject)Instantiate(cardPrefab, cardSpot2.transform.position, Quaternion.identity);
         newCard3.transform.SetParent(cardSpot2.transform);
         cardGOs.Add(newCard3);
         CardInit(newCard3);
 
-        hitCardBtn1.SetActive(true);
-        standCardBtn1.SetActive(true);
+
 
         DealerCardCover1.SetActive(true);
         DealerCardCover2.SetActive(true);
@@ -203,10 +284,7 @@ public class GameManager : MonoBehaviour
         }
 
 
-        if (cardGOs.Count > 1)
-        {
-            dealCardBtn1.SetActive(false);
-        }
+
 
         playerTotal += Deck.CardValue(newCard.GetComponent<CardScript>().cardName);
         playerTotal += Deck.CardValue(newCard1.GetComponent<CardScript>().cardName);
@@ -217,13 +295,6 @@ public class GameManager : MonoBehaviour
         UpdatePlayerText();
         UpdateDealerText();
 
-        // Update the player's and dealer's totals and display them on the UI
-        //playerTotal += Deck.CardValue(newCard.GetComponent<CardScript>().cardName);
-        //dealerTotal += Deck.CardValue(newCard1.GetComponent<CardScript>().cardName);
-        //dealerTotal += Deck.CardValue(newCard2.GetComponent<CardScript>().cardName);
-        //dealerTotal += Deck.CardValue(newCard3.GetComponent<CardScript>().cardName);
-        //UpdatePlayerText();
-        //UpdateDealerText();
     }
 
     private void CardInit(GameObject newCard)
@@ -249,7 +320,7 @@ public class GameManager : MonoBehaviour
     private void UpdateDealerText()
     {
         // Display the dealer's total only if both covered cards are revealed
-        if (!DealerCardCover1.activeSelf && !DealerCardCover2.activeSelf)
+        if (DealerCardCover1.transform.localScale.x == 0)
         {
             DealerText.GetComponent<TextMeshProUGUI>().text = "Dealer Total: " + dealerTotal;
         }
@@ -272,6 +343,7 @@ public class GameManager : MonoBehaviour
             newCard.transform.SetParent(cardSpot2.transform);
             cardGOs.Add(newCard);
             CardInit(newCard);
+            SoundManager.Instance.Play("card");
             dealerTotal += Deck.CardValue(newCard.GetComponent<CardScript>().cardName);
             newCard.transform.localPosition = new Vector3(cardSpot2.transform.GetChild(i).localPosition.x + 1, newCard.transform.localPosition.y, newCard.transform.localPosition.z);
             i++;
